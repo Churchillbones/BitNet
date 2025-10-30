@@ -12,10 +12,10 @@ components:
       volumeMounts:
         - name: bitnet-storage
           path: /workspace
-      memoryLimit: 16Gi
-      memoryRequest: 8Gi
-      cpuLimit: '8'
-      cpuRequest: '4'
+      memoryLimit: 4Gi
+      memoryRequest: 2Gi
+      cpuLimit: '2'
+      cpuRequest: '1'
       mountSources: true
       env:
         - name: DEBIAN_FRONTEND
