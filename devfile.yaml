@@ -1,0 +1,146 @@
+schemaVersion: 2.2.2
+metadata:
+  name: bitnet-development-workspace
+  version: 1.0.0
+  description: Development workspace for BitNet 1-bit LLM inference framework
+
+components:
+  # Main development container with required tools and dependencies
+  - name: bitnet-dev
+    container:
+      image: ubuntu:22.04
+      volumeMounts:
+        - name: bitnet-storage
+          path: /workspace
+      memoryLimit: '16Gi'
+      memoryRequest: '8Gi'
+      cpuLimit: '8'
+      cpuRequest: '4'
+      mountSources: true
+      env:
+        - name: DEBIAN_FRONTEND
+          value: 'noninteractive'
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        - name: CC
+          value: '/usr/bin/clang-18'
+        - name: CXX
+          value: '/usr/bin/clang++-18'
+      endpoints:
+        - name: inference-server
+          targetPort: 8080
+          exposure: public
+          protocol: http
+        - name: flexible-server
+          targetPort: 8081
+          exposure: public
+          protocol: http
+
+  # Persistent storage for models and workspace data
+  - name: bitnet-storage
+    volume:
+      size: 50Gi
+
+commands:
+  # Setup and build commands
+  - id: setup-environment
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: |
+        apt-get update && apt-get install -y \
+          python3.9 python3-pip git wget cmake build-essential \
+          lsb-release software-properties-common gnupg ca-certificates && \
+        wget https://apt.llvm.org/llvm.sh && \
+        chmod +x llvm.sh && ./llvm.sh 18 && \
+        update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100 && \
+        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100 && \
+        python3.9 -m pip install --upgrade pip setuptools wheel
+      group:
+        kind: build
+        isDefault: true
+
+  - id: install-dependencies
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: |
+        git submodule update --init --recursive && \
+        python3.9 -m pip install -r requirements.txt
+      group:
+        kind: build
+
+  - id: build-bitnet
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: |
+        mkdir -p build && cd build && \
+        cmake .. -DCMAKE_BUILD_TYPE=Release && \
+        make -j$(nproc)
+      group:
+        kind: build
+
+  # Development and testing commands
+  - id: setup-python-env
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: python3.9 setup_env.py
+      group:
+        kind: run
+
+  - id: run-inference
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: python3.9 run_inference.py
+      group:
+        kind: run
+
+  - id: start-inference-server
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: python3.9 run_inference_server.py --port 8080
+      group:
+        kind: run
+
+  - id: start-flexible-server
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: python3.9 run_server_flexible.py --port 8081
+      group:
+        kind: run
+
+  # Utility commands
+  - id: clean-build
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: rm -rf build/
+      group:
+        kind: build
+
+  - id: check-dependencies
+    exec:
+      component: bitnet-dev
+      workingDir: /workspace
+      commandLine: |
+        echo "Checking system dependencies..." && \
+        clang-18 --version && \
+        python3.9 --version && \
+        cmake --version && \
+        echo "Dependencies check complete"
+      group:
+        kind: test
+
+events:
+  # Automatically run setup when workspace starts
+  preStart:
+    - setup-environment
+  
+  # Post-start commands for development readiness
+  postStart:
+    - install-dependencies
