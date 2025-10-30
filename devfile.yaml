@@ -39,7 +39,7 @@ components:
   # Persistent storage for models and workspace data
   - name: bitnet-storage
     volume:
-      size: 50Gi
+      size: 10Gi
 
 commands:
   # Setup and build commands
