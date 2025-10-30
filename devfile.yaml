@@ -137,10 +137,7 @@ commands:
         kind: test
 
 events:
-  # Automatically run setup when workspace starts
-  preStart:
-    - setup-environment
-  
   # Post-start commands for development readiness
   postStart:
+    - setup-environment
     - install-dependencies
