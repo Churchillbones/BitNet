@@ -8,7 +8,7 @@ components:
   # Main development container with required tools and dependencies
   - name: bitnet-dev
     container:
-      image: ubuntu:22.04
+      image: quay.io/devfile/universal-developer-image:ubi8-latest
       volumeMounts:
         - name: bitnet-storage
           path: /workspace
@@ -18,14 +18,8 @@ components:
       cpuRequest: '1'
       mountSources: true
       env:
-        - name: DEBIAN_FRONTEND
-          value: noninteractive
         - name: PYTHONUNBUFFERED
           value: '1'
-        - name: CC
-          value: /usr/bin/clang-18
-        - name: CXX
-          value: /usr/bin/clang++-18
       endpoints:
         - name: inference-svc
           targetPort: 8080
@@ -43,41 +37,25 @@ components:
 
 commands:
   # Setup and build commands
-  - id: setup-environment
+  - id: install-dependencies
     exec:
       component: bitnet-dev
-      workingDir: /workspace
+      workingDir: ${PROJECT_SOURCE}
       commandLine: |
-        apt-get update && apt-get install -y \
-          python3.9 python3-pip git wget cmake build-essential \
-          lsb-release software-properties-common gnupg ca-certificates && \
-        wget https://apt.llvm.org/llvm.sh && \
-        chmod +x llvm.sh && ./llvm.sh 18 && \
-        update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100 && \
-        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100 && \
-        python3.9 -m pip install --upgrade pip setuptools wheel
+        git submodule update --init --recursive && \
+        python3 -m pip install --user -r requirements.txt
       group:
         kind: build
         isDefault: true
 
-  - id: install-dependencies
-    exec:
-      component: bitnet-dev
-      workingDir: /workspace
-      commandLine: |
-        git submodule update --init --recursive && \
-        python3.9 -m pip install -r requirements.txt
-      group:
-        kind: build
-
   - id: build-bitnet
     exec:
       component: bitnet-dev
-      workingDir: /workspace
+      workingDir: ${PROJECT_SOURCE}
       commandLine: |
         mkdir -p build && cd build && \
         cmake .. -DCMAKE_BUILD_TYPE=Release && \
-        make -j$(nproc)
+        make -j2
       group:
         kind: build
 
@@ -85,32 +63,32 @@ commands:
   - id: setup-python-env
     exec:
       component: bitnet-dev
-      workingDir: /workspace
-      commandLine: python3.9 setup_env.py
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: python3 setup_env.py
       group:
         kind: run
 
   - id: run-inference
     exec:
       component: bitnet-dev
-      workingDir: /workspace
-      commandLine: python3.9 run_inference.py
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: python3 run_inference.py
       group:
         kind: run
 
   - id: start-inference-server
     exec:
       component: bitnet-dev
-      workingDir: /workspace
-      commandLine: python3.9 run_inference_server.py --port 8080
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: python3 run_inference_server.py --port 8080
       group:
         kind: run
 
   - id: start-flexible-server
     exec:
       component: bitnet-dev
-      workingDir: /workspace
-      commandLine: python3.9 run_server_flexible.py --port 8081
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: python3 run_server_flexible.py --port 8081
       group:
         kind: run
 
@@ -118,7 +96,7 @@ commands:
   - id: clean-build
     exec:
       component: bitnet-dev
-      workingDir: /workspace
+      workingDir: ${PROJECT_SOURCE}
       commandLine: rm -rf build/
       group:
         kind: build
@@ -126,12 +104,12 @@ commands:
   - id: check-dependencies
     exec:
       component: bitnet-dev
-      workingDir: /workspace
+      workingDir: ${PROJECT_SOURCE}
       commandLine: |
         echo "Checking system dependencies..." && \
-        clang-18 --version && \
-        python3.9 --version && \
+        python3 --version && \
         cmake --version && \
+        gcc --version && \
         echo "Dependencies check complete"
       group:
         kind: test
@@ -139,5 +117,4 @@ commands:
 events:
   # Post-start commands for development readiness
   postStart:
-    - setup-environment
     - install-dependencies
